@@ -12,39 +12,87 @@ using namespace std;
 
 struct MacierzGrafu {
     int n;
-    vector<vector<int>> macierz;   // Podstawowa macierz
-    vector<vector<int>> LN;        // Lista nastepnikow 
-    vector<vector<int>> LP;        // Lista poprzednikow
-    vector<pair<int, int>> LB;     // Lista braku incydencji
-    vector<int> LC;                // Lista cykli 0-1
-    vector<int> in_deg;            // Stopnie wchodzace
-    vector<int> out_deg;           // Stopnie wychodzace
+    // Macierz o wymiarach (n+1) x (n+5).
+    // Kolumny n+1, n+2, n+3, n+4 to początki list LN, LP, LB, LC.
+    vector<vector<int>> macierz; 
 
     MacierzGrafu(int wierzcholki) {
         n = wierzcholki;
-        macierz.assign(n + 1, vector<int>(n + 1, 0));
-        LN.resize(n + 1);
-        LP.resize(n + 1);
-        in_deg.assign(n + 1, 0);
-        out_deg.assign(n + 1, 0);
+        macierz.assign(n + 1, vector<int>(n + 5, 0));
     }
 
-    // Funkcja ktor buduje listy na podstawie zapelnionej macierzy
-    void zbudujListy(bool skierowany) {
+    void zbuduj(const vector<vector<int>>& mat_sasiedztwa, bool skierowany) {
         for (int i = 1; i <= n; i++) {
+            vector<int> ln, lp, lb, lc;
+            
+            // Podział krawędzi zgodnie z logiką ze zdjęcia
             for (int j = 1; j <= n; j++) {
-                if (macierz[i][j] == 1) {
-                    LN[i].push_back(j);
-                    LP[j].push_back(i);
-                    out_deg[i]++;
-                    in_deg[j]++;
-                    if (i == j) LC.push_back(i); // Petla wlasna
-                } else if (i != j) {
-                    if (skierowany || j > i) {
-                        LB.push_back({i, j});
+                bool krawedz_w_przod = (mat_sasiedztwa[i][j] == 1);
+                bool krawedz_w_tyl = (mat_sasiedztwa[j][i] == 1);
+
+                if (skierowany) {
+                    if (krawedz_w_przod && krawedz_w_tyl) lc.push_back(j);       // Cykl 0-1 (wzajemne)
+                    else if (krawedz_w_przod && !krawedz_w_tyl) ln.push_back(j); // Tylko następnik
+                    else if (!krawedz_w_przod && krawedz_w_tyl) lp.push_back(j); // Tylko poprzednik
+                    else lb.push_back(j);                                        // Brak incydencji
+                } else {
+                    // W grafie nieskierowanym wszystkie krawędzie lądują w LN
+                    if (i == j) {
+                        if (krawedz_w_przod) lc.push_back(j); else lb.push_back(j);
+                    } else {
+                        if (krawedz_w_przod) ln.push_back(j); else lb.push_back(j);
                     }
                 }
             }
+
+            // Sprytna funkcja ładująca wskaźniki do komórek macierzy
+            auto link_list = [&](const vector<int>& list, int offset, int sign, int start_col) {
+                if (list.empty()) {
+                    macierz[i][start_col] = 0; // Brak krawędzi w danej liście
+                } else {
+                    macierz[i][start_col] = list[0];
+                    for (size_t k = 0; k < list.size(); k++) {
+                        int curr = list[k];
+                        // Jeśli to ostatni element, wskazuje na siebie
+                        int next_val = (k + 1 < list.size()) ? list[k + 1] : curr;
+                        macierz[i][curr] = sign * (next_val + offset);
+                    }
+                }
+            };
+
+            link_list(ln, 0, 1, n + 1);       // LN - startuje w kolumnie N+1
+            link_list(lp, n, 1, n + 2);       // LP - startuje w kolumnie N+2 (wartości + N)
+            link_list(lb, 0, -1, n + 3);      // LB - startuje w kolumnie N+3 (wartości ujemne)
+            link_list(lc, 2 * n, 1, n + 4);   // LC - startuje w kolumnie N+4 (wartości + 2N)
+        }
+    }
+
+    void getDegrees(int u, int& out_deg, int& in_deg) const {
+        out_deg = 0; in_deg = 0;
+        
+        // Zliczanie z Listy Następników (LN)
+        int curr = macierz[u][n + 1];
+        while (curr != 0) {
+            out_deg++;
+            int val = macierz[u][curr];
+            if (val == curr) break; // Koniec listy
+            curr = val;
+        }
+        // Zliczanie z Listy Poprzedników (LP)
+        curr = macierz[u][n + 2];
+        while (curr != 0) {
+            in_deg++;
+            int val = macierz[u][curr] - n;
+            if (val == curr) break;
+            curr = val;
+        }
+        // Zliczanie z Listy Cykli (LC) - cykle 0-1 to krawędzie w obie strony
+        curr = macierz[u][n + 4];
+        while (curr != 0) {
+            out_deg++; in_deg++;
+            int val = macierz[u][curr] - 2 * n;
+            if (val == curr) break;
+            curr = val;
         }
     }
 };
@@ -159,23 +207,36 @@ bool DEC_Euler(const vector<vector<int>>& mat, int n, bool skierowany) {
 
 // DHC - Cykl Hamiltona - macierz grafu
 bool DHC_Hamilton(const MacierzGrafu& mg, bool skierowany) {
-    if (!skierowany) {
-        // Twierdzenie Orego - iteracja po liscie braku incydencji
-        for (const auto& para : mg.LB) {
-            int u = para.first;
-            int v = para.second;
-            if (mg.out_deg[u] + mg.out_deg[v] < mg.n) return false;
+    int n = mg.n;
+    
+    // Sprawdzamy twierdzenia dla każdej pary (u, v) braku incydencji
+    for (int u = 1; u <= n; u++) {
+        int out_u, in_u;
+        mg.getDegrees(u, out_u, in_u); // Wyciągamy stopień u
+
+        int curr = mg.macierz[u][n + 3]; // Zaczynamy czytać Listę Braku Incydencji (LB) dla u
+        
+        while (curr != 0) {
+            int v = curr; // v jest wierzchołkiem z którym u nie ma krawędzi
+            
+            int out_v, in_v;
+            mg.getDegrees(v, out_v, in_v); // Wyciągamy stopień v
+
+            if (!skierowany) {
+                // Twierdzenie Orego
+                if (out_u + out_v < n) return false;
+            } else {
+                // Twierdzenie Woodalla
+                if (out_u + in_v < n) return false;
+            }
+
+            // Przejście do następnego braku krawędzi 
+            int val = -mg.macierz[u][curr];
+            if (val == curr) break; // koniec listy LB
+            curr = val;
         }
-        return true;
-    } else {
-        // Twierdzenie Woodalla - iteracja po brakujacych kraw lb
-        for (const auto& para : mg.LB) {
-            int u = para.first;
-            int v = para.second;
-            if (mg.out_deg[u] + mg.in_deg[v] < mg.n) return false;
-        }
-        return true;
     }
+    return true;
 }
 
 vector<pair<int, int>> wczytajZPliku(int& n, bool skierowany) {
@@ -242,32 +303,26 @@ void wyswietlMacierzSasiedztwa(const vector<vector<int>>& mat, int n) {
 }
 
 void wyswietlMacierzGrafu(const MacierzGrafu& mg) {
-    cout << "\n--- REPREZENTACJA: MACIERZ GRAFU (DLA HAMILTONA) ---\n";
-    cout << "Podstawowa macierz:\n";
+    cout << "\nmacierz grafu\n";
+    
+    // Wypisanie nagłówków kolumn (1..n oraz LN, LP, LB, LC)
+    cout << "i\\j\t";
+    for (int j = 1; j <= mg.n + 4; j++) {
+        if (j <= mg.n) cout << j << "\t";
+        else if (j == mg.n + 1) cout << "LN\t";
+        else if (j == mg.n + 2) cout << "LP\t";
+        else if (j == mg.n + 3) cout << "LB\t";
+        else if (j == mg.n + 4) cout << "LC\t";
+    }
+    cout << "\n";
+
+    // Wypisanie wierszy z danymi
     for (int i = 1; i <= mg.n; i++) {
-        for (int j = 1; j <= mg.n; j++) {
-            cout << mg.macierz[i][j] << " ";
+        cout << i << " |\t";
+        for (int j = 1; j <= mg.n + 4; j++) {
+            cout << mg.macierz[i][j] << "\t";
         }
         cout << "\n";
-    }
-    
-    cout << "\nLista Nastepnikow (LN):\n";
-    for (int i = 1; i <= mg.n; i++) {
-        cout << i << " -> ";
-        for (int v : mg.LN[i]) cout << v << " ";
-        cout << "\n";
-    }
-
-    cout << "\nLista Poprzednikow (LP):\n";
-    for (int i = 1; i <= mg.n; i++) {
-        cout << i << " -> ";
-        for (int v : mg.LP[i]) cout << v << " ";
-        cout << "\n";
-    }
-
-    cout << "\nLista Braku Incydencji (LB) [wykorzystana w algorytmie DHC]:\n";
-    for (const auto& para : mg.LB) {
-        cout << para.first << " -> " << para.second << "\n";
     }
 }
 
@@ -311,14 +366,15 @@ void trybDemonstracyjny() {
         cout << "\n[WYNIK DEC]: Graf " << (wynik ? "SPELNIA" : "NIE SPELNIA") << " warunkow na cykl Eulera.\n";
         
     } else if (problem == 2) {
-        MacierzGrafu mg(n);
+        vector<vector<int>> mat_sasiedztwa(n + 1, vector<int>(n + 1, 0));
         for (auto& k : krawedzie) {
-            mg.macierz[k.first][k.second] = 1;
-            if (!skierowany) mg.macierz[k.second][k.first] = 1;
+            mat_sasiedztwa[k.first][k.second] = 1;
+            if (!skierowany) mat_sasiedztwa[k.second][k.first] = 1;
         }
-        mg.zbudujListy(skierowany); 
-        wyswietlMacierzGrafu(mg);
-        cout << "\nZbudowano strukture Macierzy Grafu.\nZnaleziono " << mg.LB.size() << " brakujacych krawedzi (Lista LB).\n";
+        
+        MacierzGrafu mg(n);
+        mg.zbuduj(mat_sasiedztwa, skierowany); 
+        
         wynik = DHC_Hamilton(mg, skierowany);
         cout << "\n[WYNIK DHC]: Graf " << (wynik ? "SPELNIA" : "NIE SPELNIA") << " zbadanego warunku na cykl Hamiltona.\n";
     }
@@ -384,14 +440,14 @@ void trybEksperymentalny() {
 
                 for(int i = 0; i < 10; i++) { 
                     vector<pair<int, int>> krawedzie = generujLosowy(n, s, skierowany);
-                    
-                    // Budowa Macierzy Grafu ze strukturą LN, LP i LB specjalnie pod DHC
-                    MacierzGrafu mg(n);
+                    vector<vector<int>> mat_sasiedztwa(n + 1, vector<int>(n + 1, 0));
                     for (auto& k : krawedzie) {
-                        mg.macierz[k.first][k.second] = 1;
-                        if (!skierowany) mg.macierz[k.second][k.first] = 1;
+                        mat_sasiedztwa[k.first][k.second] = 1;
+                        if (!skierowany) mat_sasiedztwa[k.second][k.first] = 1;
                     }
-                    mg.zbudujListy(skierowany);
+
+                    MacierzGrafu mg(n);
+                    mg.zbuduj(mat_sasiedztwa, skierowany);
 
                     auto start = chrono::high_resolution_clock::now();
                     DHC_Hamilton(mg, skierowany); 
