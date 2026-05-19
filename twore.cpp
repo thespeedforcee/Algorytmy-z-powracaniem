@@ -293,7 +293,7 @@ vector<pair<int, int>> generujLosowy(int n, int s_procent, bool skierowany) {
 }
 
 void wyswietlMacierzSasiedztwa(const vector<vector<int>>& mat, int n) {
-    cout << "\n--- REPREZENTACJA: MACIERZ SASIEDZTWA (DLA EULERA) ---\n";
+    cout << "\nmacierz sasiedztwa\n";
     for (int i = 1; i <= n; i++) {
         for (int j = 1; j <= n; j++) {
             cout << mat[i][j] << " ";
@@ -363,7 +363,7 @@ void trybDemonstracyjny() {
         }
         wyswietlMacierzSasiedztwa(macierz_sasiedztwa, n);
         wynik = DEC_Euler(macierz_sasiedztwa, n, skierowany);
-        cout << "\n[WYNIK DEC]: Graf " << (wynik ? "SPELNIA" : "NIE SPELNIA") << " warunkow na cykl Eulera.\n";
+        cout << "\n[WYNIK DEC]: Graf " << (wynik ? "SPELNIA warunki" : "NIE SPELNIA warunkow") << " na cykl Eulera.\n";
         
     } else if (problem == 2) {
         vector<vector<int>> mat_sasiedztwa(n + 1, vector<int>(n + 1, 0));
@@ -376,7 +376,7 @@ void trybDemonstracyjny() {
         mg.zbuduj(mat_sasiedztwa, skierowany); 
         
         wynik = DHC_Hamilton(mg, skierowany);
-        cout << "\n[WYNIK DHC]: Graf " << (wynik ? "SPELNIA" : "NIE SPELNIA") << " zbadanego warunku na cykl Hamiltona.\n";
+        cout << "\n[WYNIK DHC]: Graf " << (wynik ? "SPELNIA zbadany warunek" : "NIE SPELNIA zbadanego warunku") << " na cykl Hamiltona.\n";
     }
 
     auto end = chrono::high_resolution_clock::now();
