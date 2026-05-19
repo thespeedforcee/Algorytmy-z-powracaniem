@@ -20,20 +20,19 @@ struct MacierzGrafu {
         n = wierzcholki;
         macierz.assign(n + 1, vector<int>(n + 5, 0));
     }
-
+    //buduje z macierzy sasiedztwa macierz grafu
     void zbuduj(const vector<vector<int>>& mat_sasiedztwa, bool skierowany) {
         for (int i = 1; i <= n; i++) {
             vector<int> ln, lp, lb, lc;
             
-            // Podział krawędzi zgodnie z logiką ze zdjęcia
             for (int j = 1; j <= n; j++) {
                 bool krawedz_w_przod = (mat_sasiedztwa[i][j] == 1);
                 bool krawedz_w_tyl = (mat_sasiedztwa[j][i] == 1);
 
                 if (skierowany) {
                     if (krawedz_w_przod && krawedz_w_tyl) lc.push_back(j);       // Cykl 0-1 (wzajemne)
-                    else if (krawedz_w_przod && !krawedz_w_tyl) ln.push_back(j); // Tylko następnik
-                    else if (!krawedz_w_przod && krawedz_w_tyl) lp.push_back(j); // Tylko poprzednik
+                    else if (krawedz_w_przod && !krawedz_w_tyl) ln.push_back(j); // Tylko in
+                    else if (!krawedz_w_przod && krawedz_w_tyl) lp.push_back(j); // Tylko out
                     else lb.push_back(j);                                        // Brak incydencji
                 } else {
                     // W grafie nieskierowanym wszystkie krawędzie lądują w LN
@@ -50,11 +49,12 @@ struct MacierzGrafu {
                 if (list.empty()) {
                     macierz[i][start_col] = 0; // Brak krawędzi w danej liście
                 } else {
-                    macierz[i][start_col] = list[0];
+                    macierz[i][start_col] = list[0]; //glowa listy wskazuje na pierwszy element
                     for (size_t k = 0; k < list.size(); k++) {
                         int curr = list[k];
                         // Jeśli to ostatni element, wskazuje na siebie
                         int next_val = (k + 1 < list.size()) ? list[k + 1] : curr;
+                        // Mnożymy przez znak (ujemne dla LB) i dodajemy offset, by móc odróżnić z jakiej listy czytamy
                         macierz[i][curr] = sign * (next_val + offset);
                     }
                 }
@@ -112,13 +112,13 @@ bool czySpojnyNieskierowany(const vector<vector<int>>& mat, int n, const vector<
     int start = 0; 
     for (int i = 1; i <= n; i++) {
         if (stopnie[i] > 0) {
-            start = i;
+            start = i; //szuka 1 wierzcholka
             break;
         }
     }
     if (start == 0) return true; // Graf pusty (bez krawedzi) trywialnie spelnia warunek
 
-    vector<bool> odwiedzone(n + 1, false);
+    vector<bool> odwiedzone(n + 1, false); //bfs
     queue<int> q;
     q.push(start);
     odwiedzone[start] = true;
@@ -209,24 +209,24 @@ bool DEC_Euler(const vector<vector<int>>& mat, int n, bool skierowany) {
 bool DHC_Hamilton(const MacierzGrafu& mg, bool skierowany) {
     int n = mg.n;
     
-    // Sprawdzamy twierdzenia dla każdej pary (u, v) braku incydencji
+    // Sprawdzamy twierdzenia dla każdej pary (u, v) braku krawedzi
     for (int u = 1; u <= n; u++) {
         int out_u, in_u;
-        mg.getDegrees(u, out_u, in_u); // Wyciągamy stopień u
+        mg.getDegrees(u, out_u, in_u); // wyciagniecie st u
 
-        int curr = mg.macierz[u][n + 3]; // Zaczynamy czytać Listę Braku Incydencji (LB) dla u
+        int curr = mg.macierz[u][n + 3]; // zaczynamy od LB zeby nie iterowac po calej tab
         
         while (curr != 0) {
             int v = curr; // v jest wierzchołkiem z którym u nie ma krawędzi
             
             int out_v, in_v;
-            mg.getDegrees(v, out_v, in_v); // Wyciągamy stopień v
+            mg.getDegrees(v, out_v, in_v); // wyciagniecie st v
 
             if (!skierowany) {
-                // Twierdzenie Orego
+                // Twierdzenie Orego, graf hamiltonowski
                 if (out_u + out_v < n) return false;
             } else {
-                // Twierdzenie Woodalla
+                // Twierdzenie Woodalla, wychodzace u + wchodzace v >= n
                 if (out_u + in_v < n) return false;
             }
 
