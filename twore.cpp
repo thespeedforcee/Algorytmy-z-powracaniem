@@ -5,8 +5,49 @@
 #include <random>
 #include <queue>
 #include <numeric>
+#include <utility>
+#include <cmath>
 
 using namespace std;
+
+struct MacierzGrafu {
+    int n;
+    vector<vector<int>> macierz;   // Podstawowa macierz
+    vector<vector<int>> LN;        // Lista nastepnikow 
+    vector<vector<int>> LP;        // Lista poprzednikow
+    vector<pair<int, int>> LB;     // Lista braku incydencji
+    vector<int> LC;                // Lista cykli 0-1
+    vector<int> in_deg;            // Stopnie wchodzace
+    vector<int> out_deg;           // Stopnie wychodzace
+
+    MacierzGrafu(int wierzcholki) {
+        n = wierzcholki;
+        macierz.assign(n + 1, vector<int>(n + 1, 0));
+        LN.resize(n + 1);
+        LP.resize(n + 1);
+        in_deg.assign(n + 1, 0);
+        out_deg.assign(n + 1, 0);
+    }
+
+    // Funkcja ktor buduje listy na podstawie zapelnionej macierzy
+    void zbudujListy(bool skierowany) {
+        for (int i = 1; i <= n; i++) {
+            for (int j = 1; j <= n; j++) {
+                if (macierz[i][j] == 1) {
+                    LN[i].push_back(j);
+                    LP[j].push_back(i);
+                    out_deg[i]++;
+                    in_deg[j]++;
+                    if (i == j) LC.push_back(i); // Petla wlasna
+                } else if (i != j) {
+                    if (skierowany || j > i) {
+                        LB.push_back({i, j});
+                    }
+                }
+            }
+        }
+    }
+};
 
 void obliczStopnie(const vector<vector<int>>& mat, int n, bool skierowany, vector<int>& in_deg, vector<int>& out_deg) {
     for (int i = 1; i <= n; i++) {
@@ -96,7 +137,7 @@ bool czySilnieSpojny(const vector<vector<int>>& mat, int n, const vector<int>& o
     return true;
 }
 
-// DEC - Cykl Eulera
+// DEC - Cykl Eulera - macierz sasiedztwa
 bool DEC_Euler(const vector<vector<int>>& mat, int n, bool skierowany) {
     vector<int> in_deg(n + 1, 0), out_deg(n + 1, 0);
     obliczStopnie(mat, n, skierowany, in_deg, out_deg);
@@ -116,50 +157,32 @@ bool DEC_Euler(const vector<vector<int>>& mat, int n, bool skierowany) {
     }
 }
 
-// DHC - Cykl Hamiltona
-bool DHC_Hamilton(const vector<vector<int>>& mat, int n, bool skierowany) {
-    vector<int> in_deg(n + 1, 0), out_deg(n + 1, 0);
-    obliczStopnie(mat, n, skierowany, in_deg, out_deg);
-
+// DHC - Cykl Hamiltona - macierz grafu
+bool DHC_Hamilton(const MacierzGrafu& mg, bool skierowany) {
     if (!skierowany) {
-        // Twierdzenie Orego (warunek wystarczajacy)
-        for (int i = 1; i <= n; i++) {
-            for (int j = i + 1; j <= n; j++) {
-                if (mat[i][j] == 0) {
-                    if (out_deg[i] + out_deg[j] < n) return false;
-                }
-            }
+        // Twierdzenie Orego - iteracja po liscie braku incydencji
+        for (const auto& para : mg.LB) {
+            int u = para.first;
+            int v = para.second;
+            if (mg.out_deg[u] + mg.out_deg[v] < mg.n) return false;
         }
         return true;
     } else {
-        // Twierdzenie Woodalla (warunek wystarczajacy)
-        for (int i = 1; i <= n; i++) {
-            for (int j = 1; j <= n; j++) {
-                if (i != j && mat[i][j] == 0) {
-                    if (out_deg[i] + in_deg[j] < n) return false;
-                }
-            }
+        // Twierdzenie Woodalla - iteracja po brakujacych kraw lb
+        for (const auto& para : mg.LB) {
+            int u = para.first;
+            int v = para.second;
+            if (mg.out_deg[u] + mg.in_deg[v] < mg.n) return false;
         }
         return true;
     }
 }
 
-void wyswietlMacierz(const vector<vector<int>>& mat, int n) {
-    cout << "\nMacierz grafu:\n";
-    for (int i = 1; i <= n; i++) {
-        for (int j = 1; j <= n; j++) {
-            cout << mat[i][j] << " ";
-        }
-        cout << "\n";
-    }
-}
-
-vector<vector<int>> wczytajZPliku(int& n, bool& prosty, bool skierowany) {
+vector<pair<int, int>> wczytajZPliku(int& n, bool skierowany) {
     string nazwa;
-    cout << "Podaj nazwe pliku (np. dane2.txt): ";
+    cout << "Podaj nazwe pliku: ";
     cin >> nazwa;
     ifstream plik(nazwa);
-    prosty = true;
     
     if (!plik.is_open()) {
         cout << "[BLAD] Nie udalo sie otworzyc pliku!\n";
@@ -172,27 +195,21 @@ vector<vector<int>> wczytajZPliku(int& n, bool& prosty, bool skierowany) {
         return {};
     }
 
-    vector<vector<int>> mat(n + 1, vector<int>(n + 1, 0));
+    vector<pair<int, int>> krawedzie;
     for (int i = 0; i < m; i++) {
         int u, v;
         if (plik >> u >> v) {
-            if (u < 1 || v < 1 || u > n || v > n) {
-                cout << "[BLAD] Wierzcholki poza zakresem: " << u << " -> " << v << "\n";
-                continue;
+            if (u >= 1 && v >= 1 && u <= n && v <= n && u != v) {
+                krawedzie.push_back({u, v});
             }
-            if (u == v) prosty = false; // Petla wlasna
-            if (mat[u][v] == 1) prosty = false; // Krawedz wielokrotna
-            
-            mat[u][v] = 1;
-            if (!skierowany) mat[v][u] = 1;
         }
     }
-    plik.close();
-    return mat;
+    return krawedzie;
 }
 
-vector<vector<int>> generujLosowy(int n, int s_procent, bool skierowany) {
-    vector<vector<int>> mat(n + 1, vector<int>(n + 1, 0));
+vector<pair<int, int>> generujLosowy(int n, int s_procent, bool skierowany) {
+    vector<pair<int, int>> krawedzie;
+    vector<vector<int>> tmp(n+1, vector<int>(n+1,0));
     int max_krawedzi = skierowany ? n * (n - 1) : n * (n - 1) / 2;
     int docelowe_krawedzie = (max_krawedzi * s_procent) / 100;
 
@@ -204,13 +221,54 @@ vector<vector<int>> generujLosowy(int n, int s_procent, bool skierowany) {
     while (dodane < docelowe_krawedzie) {
         int u = dist(gen);
         int v = dist(gen);
-        if (u != v && mat[u][v] == 0) {
-            mat[u][v] = 1;
-            if (!skierowany) mat[v][u] = 1;
+        if (u != v && tmp[u][v] == 0) {
+            tmp[u][v] = 1;
+            krawedzie.push_back({u, v});
+            if (!skierowany) tmp[v][u] = 1;
             dodane++;
         }
     }
-    return mat;
+    return krawedzie;
+}
+
+void wyswietlMacierzSasiedztwa(const vector<vector<int>>& mat, int n) {
+    cout << "\n--- REPREZENTACJA: MACIERZ SASIEDZTWA (DLA EULERA) ---\n";
+    for (int i = 1; i <= n; i++) {
+        for (int j = 1; j <= n; j++) {
+            cout << mat[i][j] << " ";
+        }
+        cout << "\n";
+    }
+}
+
+void wyswietlMacierzGrafu(const MacierzGrafu& mg) {
+    cout << "\n--- REPREZENTACJA: MACIERZ GRAFU (DLA HAMILTONA) ---\n";
+    cout << "Podstawowa macierz:\n";
+    for (int i = 1; i <= mg.n; i++) {
+        for (int j = 1; j <= mg.n; j++) {
+            cout << mg.macierz[i][j] << " ";
+        }
+        cout << "\n";
+    }
+    
+    cout << "\nLista Nastepnikow (LN):\n";
+    for (int i = 1; i <= mg.n; i++) {
+        cout << i << " -> ";
+        for (int v : mg.LN[i]) cout << v << " ";
+        cout << "\n";
+    }
+
+    cout << "\nLista Poprzednikow (LP):\n";
+    for (int i = 1; i <= mg.n; i++) {
+        cout << i << " -> ";
+        for (int v : mg.LP[i]) cout << v << " ";
+        cout << "\n";
+    }
+
+    cout << "\nLista Braku Incydencji (LB) [wykorzystana w algorytmie DHC]:\n";
+    for (const auto& para : mg.LB) {
+        cout << para.first << " -> " << para.second << "\n";
+    }
 }
 
 void trybDemonstracyjny() {
@@ -225,33 +283,44 @@ void trybDemonstracyjny() {
 
     bool skierowany = (typ == 2);
     int n = 0;
-    vector<vector<int>> macierz;
-    bool prosty = true;
+    vector<pair<int, int>> krawedzie;
 
     if (wejscie == 1) {
-        macierz = wczytajZPliku(n, prosty, skierowany);
-        if (macierz.empty()) return;
-        if (!prosty) cout << "[UWAGA] Graf ma petle wlasne lub krawedzie wielokrotne.\n";
+        krawedzie = wczytajZPliku(n, skierowany);
     } else {
         int s;
         cout << "Podaj liczbe wierzcholkow (n): ";
         cin >> n;
         cout << "Podaj nasycenie grafu (w %): ";
         cin >> s;
-        macierz = generujLosowy(n, s, skierowany);
+        krawedzie = generujLosowy(n, s, skierowany);
     }
-
-    wyswietlMacierz(macierz, n);
+    if (n == 0) return;
 
     auto start = chrono::high_resolution_clock::now();
     bool wynik = false;
     
     if (problem == 1) {
-        wynik = DEC_Euler(macierz, n, skierowany);
+        vector<vector<int>> macierz_sasiedztwa(n + 1, vector<int>(n + 1, 0));
+        for (auto& k : krawedzie) {
+            macierz_sasiedztwa[k.first][k.second] = 1;
+            if (!skierowany) macierz_sasiedztwa[k.second][k.first] = 1;
+        }
+        wyswietlMacierzSasiedztwa(macierz_sasiedztwa, n);
+        wynik = DEC_Euler(macierz_sasiedztwa, n, skierowany);
         cout << "\n[WYNIK DEC]: Graf " << (wynik ? "SPELNIA" : "NIE SPELNIA") << " warunkow na cykl Eulera.\n";
-    } else {
-        wynik = DHC_Hamilton(macierz, n, skierowany);
-        cout << "\n[WYNIK DHC]: Graf " << (wynik ? "SPELNIA" : "NIE SPELNIA") << " zbadanego warunku wystarczajacego na cykl Hamiltona.\n";
+        
+    } else if (problem == 2) {
+        MacierzGrafu mg(n);
+        for (auto& k : krawedzie) {
+            mg.macierz[k.first][k.second] = 1;
+            if (!skierowany) mg.macierz[k.second][k.first] = 1;
+        }
+        mg.zbudujListy(skierowany); 
+        wyswietlMacierzGrafu(mg);
+        cout << "\nZbudowano strukture Macierzy Grafu.\nZnaleziono " << mg.LB.size() << " brakujacych krawedzi (Lista LB).\n";
+        wynik = DHC_Hamilton(mg, skierowany);
+        cout << "\n[WYNIK DHC]: Graf " << (wynik ? "SPELNIA" : "NIE SPELNIA") << " zbadanego warunku na cykl Hamiltona.\n";
     }
 
     auto end = chrono::high_resolution_clock::now();
@@ -261,23 +330,86 @@ void trybDemonstracyjny() {
 
 void trybEksperymentalny() {
     cout << "\n--- TRYB EKSPERYMENTALNY ---\n";
-    cout << "Tutaj program w petli wygeneruje wyniki do tabelek zgodnie z wytycznymi[cite: 24].\n";
+    cout << "Generowanie danych pomiarowych (srednia z 10 uruchomien i odchylenie standardowe).\n";
     
-    vector<int> n_wartosci = {1000, 2000, 3000}; // Przykladowe wartosci, dostosuj do wymogow.
-    vector<int> s_wartosci = {10, 50, 90};
+    vector<int> n_wartosci_DEC = {1000, 1500, 2000, 2500, 3000}; 
+    vector<int> n_wartosci_DHC = {100, 200, 300, 400, 500};      
     
-    cout << "Przyklad dzialania w tle (dane do Excela)...\n";
-    for(int n : n_wartosci) {
+    vector<int> s_wartosci = {10, 20, 30, 40, 50, 60, 70, 80, 90}; 
+
+    cout << "           TESTY DEC (Cykl Eulera)           \n";
+    for(int n : n_wartosci_DEC) {
         for(int s : s_wartosci) {
-            double suma_czasu = 0;
-            for(int i = 0; i < 10; i++) { // 10 prob
-                vector<vector<int>> mat = generujLosowy(n, s, false);
-                auto start = chrono::high_resolution_clock::now();
-                DEC_Euler(mat, n, false); // Tylko DEC jako przyklad
-                auto end = chrono::high_resolution_clock::now();
-                suma_czasu += chrono::duration<double, milli>(end - start).count();
+            for(bool skierowany : {false, true}) { // Automatycznie testuje oba typy 
+                vector<double> czasy;
+                double suma_czasu = 0;
+
+                for(int i = 0; i < 10; i++) { // 10 prob 
+                    vector<pair<int, int>> krawedzie = generujLosowy(n, s, skierowany);
+                    
+                    // Budowa macierzy sasiedztwa tylko dla algorytmu DEC
+                    vector<vector<int>> macierz_sasiedztwa(n + 1, vector<int>(n + 1, 0));
+                    for (auto& k : krawedzie) {
+                        macierz_sasiedztwa[k.first][k.second] = 1;
+                        if (!skierowany) macierz_sasiedztwa[k.second][k.first] = 1;
+                    }
+
+                    auto start = chrono::high_resolution_clock::now();
+                    DEC_Euler(macierz_sasiedztwa, n, skierowany); 
+                    auto end = chrono::high_resolution_clock::now();
+                    
+                    double czas = chrono::duration<double, milli>(end - start).count();
+                    czasy.push_back(czas);
+                    suma_czasu += czas;
+                }
+
+                // Obliczanie sredniej i odchylenia standardowego 
+                double srednia = suma_czasu / 10.0;
+                double wariancja = 0;
+                for(double czas : czasy) { wariancja += pow(czas - srednia, 2); }
+                double odchylenie = sqrt(wariancja / 10.0); 
+
+                cout << "DEC | " << (skierowany ? "Skierowany   " : "Nieskierowany") 
+                     << " | n=" << n << ", s=" << s << "% | Sredni czas: " << srednia << " ms | Odch. std: " << odchylenie << " ms\n";
             }
-            cout << "n=" << n << ", s=" << s << "% | Sredni czas DEC (Nieskierowany): " << suma_czasu/10.0 << " ms\n";
+        }
+    }
+
+    cout << "         TESTY DHC (Cykl Hamiltona)          \n";
+    for(int n : n_wartosci_DHC) {
+        for(int s : s_wartosci) {
+            for(bool skierowany : {false, true}) { 
+                vector<double> czasy;
+                double suma_czasu = 0;
+
+                for(int i = 0; i < 10; i++) { 
+                    vector<pair<int, int>> krawedzie = generujLosowy(n, s, skierowany);
+                    
+                    // Budowa Macierzy Grafu ze strukturą LN, LP i LB specjalnie pod DHC
+                    MacierzGrafu mg(n);
+                    for (auto& k : krawedzie) {
+                        mg.macierz[k.first][k.second] = 1;
+                        if (!skierowany) mg.macierz[k.second][k.first] = 1;
+                    }
+                    mg.zbudujListy(skierowany);
+
+                    auto start = chrono::high_resolution_clock::now();
+                    DHC_Hamilton(mg, skierowany); 
+                    auto end = chrono::high_resolution_clock::now();
+                    
+                    double czas = chrono::duration<double, milli>(end - start).count();
+                    czasy.push_back(czas);
+                    suma_czasu += czas;
+                }
+
+                double srednia = suma_czasu / 10.0;
+                double wariancja = 0;
+                for(double czas : czasy) { wariancja += pow(czas - srednia, 2); }
+                double odchylenie = sqrt(wariancja / 10.0); 
+
+                cout << "DHC | " << (skierowany ? "Skierowany   " : "Nieskierowany") 
+                     << " | n=" << n << ", s=" << s << "% | Sredni czas: " << srednia << " ms | Odch. std: " << odchylenie << " ms\n";
+            }
         }
     }
 }
