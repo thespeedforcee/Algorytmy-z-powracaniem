@@ -374,6 +374,7 @@ void trybDemonstracyjny() {
         
         MacierzGrafu mg(n);
         mg.zbuduj(mat_sasiedztwa, skierowany); 
+        wyswietlMacierzGrafu(mg);
         
         wynik = DHC_Hamilton(mg, skierowany);
         cout << "\n[WYNIK DHC]: Graf " << (wynik ? "SPELNIA zbadany warunek" : "NIE SPELNIA zbadanego warunku") << " na cykl Hamiltona.\n";
