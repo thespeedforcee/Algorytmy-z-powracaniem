@@ -1,1 +1,6 @@
-# aids-projekt4
+**Zadanie 4: Algorytmy z powracaniem**
+Zadanie obejmuje implementację oraz eksperymentalne porównanie algorytmów przeszukiwania z wykorzystaniem techniki powracania dla wybranych problemów grafowych oraz analizę ich zachowania w zależności od rozmiaru i struktury danych wejściowych. Projekt ma na celu zrozumienie różnic między problemami o różnej złożoności obliczeniowej, wpływu przestrzeni rozwiązań na koszt przeszukiwania oraz znaczenia złożoności asymptotycznej w praktyce. Dodatkowo pozwala porównać efektywność tej samej techniki (backtracking) dla problemów łatwych i trudnych obliczeniowo
+
+**algorytmy rozwiązujące problem cyklu Eulera oraz problem cyklu Hamiltona w grafie nieskierowanym oraz digrafie:**
+1. Algorytm rozwiązujący wersję decyzyjną. Algorytm DEC dla cyklu Eulera powinien sprawdzać czy graf spełnia warunek konieczny i wystarczający. Algorytm DHC dla cyklu Hamiltona w grafie nieskierowanym powinien sprawdzać warunek wystarczający z twierdzenia Orego, natomiast w grafie skierowanym – warunek wystarczający z twierdzenia Woodalla.
+2. Algorytm rozwiązujący wersję przeszukiwania wykorzystujący technikę powracania. Algorytm SEC dla cyklu Eulera powinien realizować przeszukiwanie przestrzeni rozwiązań, polegające na wyborze kolejnych krawędzi i cofaniu się w przypadku braku możliwości kontynuacji cyklu. Algorytm SHC dla cyklu Hamiltona powinien stosować metodę Robertsa-Floresa
